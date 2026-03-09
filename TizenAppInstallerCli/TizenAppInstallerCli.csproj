@@ -16,6 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="ConsolePasswordMasker" Version="1.0.0" />
       <PackageReference Include="Spectre.Console.Cli" Version="0.51.1" />
     </ItemGroup>
 

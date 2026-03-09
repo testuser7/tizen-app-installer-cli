@@ -1,3 +1,4 @@
+using Spectre.Console;
 using System.IO.Compression;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
@@ -74,24 +75,43 @@ public class TizenInstaller
 
     private async Task<Stream> SignApp()
     {
-        SamsungAuth? samsungAuth = await SamsungLoginService.PerformSamsungLoginAsync();
-        if (samsungAuth is null)
-            throw new Exception("Could not authenticate with Samsung servers");
+        X509Certificate2Collection authorPfx = null;
+        X509Certificate2Collection distributorPfx = null;
 
-        SamsungCertificateCreator certCreator = new();
+        bool isCertFile = AnsiConsole.Prompt(
+            new TextPrompt<bool>("Would you like to use certificate files?: ")
+                .AddChoice(true)
+                .AddChoice(false)
+                .DefaultValue(false)
+                .WithConverter(choice => choice ? "y" : "n"));
 
-        string deviceUid = await GetTvDeviceUid();
+        if (isCertFile)
+        {
+            CertificateFile certFile = new();
+            (authorPfx, distributorPfx) =
+                await certFile.ReadCertificate();
+        }
+        else
+        {
+            SamsungAuth? samsungAuth = await SamsungLoginService.PerformSamsungLoginAsync();
+            if (samsungAuth is null)
+                throw new Exception("Could not authenticate with Samsung servers");
 
-        string email = samsungAuth.InputEmailID ?? "";
-        AuthorInfo authorInfo = new(
-            Name: email,
-            Email: email,
-            Password: email,
-            PrivilegeLevel: "Public"
-        );
+            SamsungCertificateCreator certCreator = new();
 
-        (X509Certificate2Collection authorPfx, X509Certificate2Collection distributorPfx, _) =
-            await certCreator.CreateCertificateAsync(authorInfo, samsungAuth, [deviceUid]);
+            string deviceUid = await GetTvDeviceUid();
+
+            string email = samsungAuth.InputEmailID ?? "";
+            AuthorInfo authorInfo = new(
+                Name: email,
+                Email: email,
+                Password: email,
+                PrivilegeLevel: "Public"
+            );
+
+            (authorPfx, distributorPfx, _) =
+                await certCreator.CreateCertificateAsync(authorInfo, samsungAuth, [deviceUid]);
+        }
         Stream signedStream = await TizenResigner.ResignPackageAsync(_packageStream, authorPfx, distributorPfx);
 
         return signedStream;
